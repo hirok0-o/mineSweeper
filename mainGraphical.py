@@ -3,23 +3,22 @@ import time
 import numpy as np
 import sys
 import pygame
-from pygame.locals import *
 import os
+
 # variables
-gridSize = 5
-mines = 4
+gridSize = 20
+mines = 95
 coord = [-1, -1]
 gameState = True
-w, h = 500, 500
-
-# set up pygame
-
+w, h = 750, 750
+#colours
 WHITE=(255,255,255)
 BLACK=(0,0,0)
 GREY=(128,128,128)
 BLUE=(0,0,255)
 RED=(255,0,0)
 
+#class for making visual grid
 class square():
     def __init__(self, x, y, width, height, color, text=""):
         self.x = x
@@ -30,7 +29,6 @@ class square():
         self.text = text
 
     def draw(self, screen):
-        #draw square with black outline and padding
         self.rect=pygame.draw.rect(screen, self.color, (self.x, self.y, self.width, self.height))
         pygame.draw.rect(screen, BLACK, (self.x, self.y, self.width, self.height), 1)
         if self.text != "":
@@ -38,7 +36,7 @@ class square():
             text = font.render(self.text, 1, BLACK)
             screen.blit(text, (self.x + (self.width/2 - text.get_width()/2), self.y + (self.height/2 - text.get_height()/2)))
 
-
+#creates grid using Square, variable dimensions possible
 def outPut(outGrid):
     global  boxes
     boxes=[]
@@ -49,8 +47,6 @@ def outPut(outGrid):
             yPos=j*(h/gridSize)
             width=w/gridSize
             height=h/gridSize
-
-
             if outGrid[i, j] == "-":
                 color = GREY
             elif outGrid[i, j] == "X":
@@ -61,11 +57,7 @@ def outPut(outGrid):
             boxes.append(square(xPos, yPos, width, height, color, text))
             boxes[-1].draw(screen)
 
-def inBox(coord: list, box) -> bool:
-    if coord[0] in range(box.x, box.x+box.width) and coord[-1] in range(box.y, box.y+box.height):
-        return True
-    return False
-
+#bfs to revael surrounding squares
 def bfs(coord):
     global grid, hiddenGrid, visitedGrid, hiddenGrid2
     queue = [coord]
@@ -93,15 +85,13 @@ def bfs(coord):
                 if inGrid([x+1, y-1], gridSize):
                     queue.append([x+1, y-1])
 
-
+#checks if coord is in grid
 def inGrid(coord: list, gridSize: int) -> bool:
     if coord[0] <= gridSize-1 and coord[0] > -1 and coord[-1] <= gridSize-1 and coord[-1] > -1:
         return True
     return False
 
 # gets number of mines surrounding coord
-
-
 def getSurroundings(x: int, y: int) -> int:
     global grid
     tot = 0
@@ -121,15 +111,14 @@ def getSurroundings(x: int, y: int) -> int:
         tot += 1
     if inGrid([x+1, y-1], gridSize) and grid[x+1, y-1] == -1:
         tot += 1
-
     return tot
 
-
+#checks coord is not in surrounding coords of initial input
+#so mines are not placed in surrounding coords
 def inSurroundingCoords(coord: list, centreCoord: list) -> bool:
     if coord[0] in range(centreCoord[0]-2, centreCoord[0]+2) and coord[-1] in range(centreCoord[-1]-2, centreCoord[-1]+2):
         return True
     return False
-
 
 # checks users coord if it is not mine, if not reveals it, if equal to 0 reqeals surrounding coords
 def coordChecker(coord) -> bool:
@@ -148,11 +137,19 @@ def coordChecker(coord) -> bool:
         bfs(coord)
         return True
 
-
+#generates all grids and mines
 def generate(n: int, startCoord: list) -> None:
     global grid, hiddenGrid, visitedGrid, hiddenGrid2
+
+    #grid is complete and correct generated grid, is not changed
+    #visited grid shows squares that have been revealed
     grid = np.zeros([gridSize, gridSize], dtype=np.int32)
     visitedGrid = np.full([gridSize, gridSize], -1, dtype=np.int32)
+
+    #hiddengrid is what is displayed to user
+    #hiddenGrid2 is what is used to check if user has won
+    hiddenGrid = np.full([gridSize, gridSize], "-", dtype=str)
+    hiddenGrid2 = np.full([gridSize, gridSize], -1, dtype=np.int8)
 
     # place mines
     tot = 0
@@ -162,36 +159,43 @@ def generate(n: int, startCoord: list) -> None:
             tot += 1
             grid[coord[0], coord[1]] = -1
 
+    # get number of mines surrounding each coord
     for i in range(gridSize):
         for j in range(gridSize):
             if grid[i, j] != -1:
                 grid[i, j] = getSurroundings(i, j)
-
-    hiddenGrid = np.full([gridSize, gridSize], "-", dtype=str)
-    hiddenGrid2 = np.full([gridSize, gridSize], -1, dtype=np.int8)
     t = coordChecker(startCoord)
 
-
 def main():
-    global gameState, screen, clock, hiddenGrid
-    coord = [-1, -1]
-    while not inGrid(coord, gridSize):
-        print(
-            f"Please enter coordinates in the format of y, x in the ranges of {gridSize,gridSize}\n")
-        try:
-            coord = eval('['+input("Enter coordinate\n>")+']')
-        except:
-            pass
-    generate(gridSize, coord)
+    global gameState, screen, clock, hiddenGrid   
+    
+    #intialize pygame
     os.environ["SDL_VIDEO_CENTERED"] = "1"
     pygame.init()
-
-
     pygame.display.set_caption("Minesweeper")
     screen = pygame.display.set_mode((w, h))
     clock = pygame.time.Clock()
 
-    
+    #get intial square and genereate grid
+    emptyGrid=np.full([gridSize, gridSize], "-", dtype=str)
+    state=True
+    while state:
+        outPut(emptyGrid)
+        for events in pygame.event.get():
+            if events.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if events.type == pygame.MOUSEBUTTONDOWN:
+                coord = pygame.mouse.get_pos()
+                for ind, box in enumerate(boxes):
+                    if box.rect.collidepoint(coord[1], coord[0]):
+                        x, y = ind % gridSize, ind//gridSize
+                        coord=[x,y]
+                        state=False
+        pygame.display.update()
+    generate(gridSize, coord)
+
+    #main game
     run = True
     clock = pygame.time.Clock()
     while run:
@@ -208,18 +212,13 @@ def main():
                         if np.array_equal(grid, hiddenGrid2):
                             print("You win!")
                             run = False
-            
-
-
         outPut(hiddenGrid)
-        
         pygame.display.update()
     
     outPut(hiddenGrid2)
     pygame.display.update()
     time.sleep(5)
     pygame.quit()
-
 
 if __name__ == '__main__':
     main()
